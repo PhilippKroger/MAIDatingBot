@@ -7,8 +7,9 @@ from aiogram import executor
 from config import API_TOKEN, list_of_likes
 from scripts import *
 from keyboards import *
-
+import urllib
 import logging
+import requests
 
 from states_and_obj import *
 
@@ -223,19 +224,22 @@ async def cmd_next2(message: types.Message):
 async def send_profile(user_id, profile_id, keyboard):
     if type(profile_id) == int:
         profile = User(profile_id)
+        file_info = await bot.get_file(profile.photo)
+        file_path = file_info.file_path
+        url = f"https://api.telegram.org/file/bot{API_TOKEN}/{file_path}"
+        response = requests.get(url)
+        photo = response.content
         profile_text = f"{profile.name}, {profile.age}\n{profile.personal_data}"
-        await bot.send_photo(user_id, profile.photo, profile_text, reply_markup=keyboard)
+        await bot.send_photo(user_id, photo, profile_text, reply_markup=keyboard)
     else:
         profile = User(profile_id[0])
-        # if os.path.exists(f'images/{profile.user_id}') == False:
-        #    profile_text = f"{profile.name}, {profile.age}\n{profile.personal_data}"
-        #    await bot.send_message(user_id, profile_text, reply_markup=keyboard, parse_mode=ParseMode.MARKDOWN)
-        # else:
-        # photo = open(f'images/{profile.user_id}/{profile.user_id}.jpg', 'rb')
+        file_info = await bot.get_file(profile.photo)
+        file_path = file_info.file_path
+        url = f"https://api.telegram.org/file/bot{API_TOKEN}/{file_path}"
+        response = requests.get(url)
+        photo = response.content
         profile_text = f"{profile.name}, {profile.age}\n{profile.personal_data}"
-        await bot.send_photo(user_id, profile.photo, profile_text, reply_markup=keyboard)
-        # await bot.send_photo(user_id, photo, profile_text, reply_markup=keyboard)
-
+        await bot.send_photo(user_id, photo, profile_text, reply_markup=keyboard)
 
 # Обработка лайка
 @dp.message_handler(Text(equals='❤'))
