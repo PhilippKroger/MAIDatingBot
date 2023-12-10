@@ -25,7 +25,7 @@ dp = Dispatcher(bot, storage=storage)
 flag = 0
 flag_index = 0
 
-# comment
+# comment хуй хуй хуй
 @dp.message_handler(Text(equals=['Зарегистрироваться']))
 async def registration(message: types.Message):
     await message.answer("Как тебя зовут?", reply_markup=types.ReplyKeyboardRemove())
