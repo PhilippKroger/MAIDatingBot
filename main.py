@@ -2,15 +2,13 @@ from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.dispatcher.filters import Text
 from aiogram import Bot, Dispatcher
 from aiogram.dispatcher import FSMContext
-from aiogram.types import ParseMode
 from aiogram import executor
 
-from config import API_TOKEN, list_likov
+from config import API_TOKEN, list_of_likes
 from scripts import *
 from keyboards import *
 
 import logging
-import os
 
 from states_and_obj import *
 
@@ -25,14 +23,15 @@ dp = Dispatcher(bot, storage=storage)
 flag = 0
 flag_index = 0
 
-# comment хуй хуй хуй
+
+# Начало регистрации пользователя
 @dp.message_handler(Text(equals=['Зарегистрироваться']))
 async def registration(message: types.Message):
     await message.answer("Как тебя зовут?", reply_markup=types.ReplyKeyboardRemove())
     await Form.name.set()
 
 
-# Обработка команды /start
+# /start
 @dp.message_handler(commands=['start'])
 async def start(message: types.Message):
     user_id = message.from_user.id
@@ -48,17 +47,18 @@ async def start(message: types.Message):
         await message.answer('Бота разработали: @lantafik и @PhilippKroger')
 
 
+# Обработчик имени пользователя
 @dp.message_handler(state=Form.name)
-async def process_name(message: types.Message, state: FSMContext):
+async def set_user_name(message: types.Message, state: FSMContext):
     name = message.text
     await state.update_data(name=name)
     await message.answer("Сколько тебе лет?\nНапиши число, например: 18", reply_markup=types.ReplyKeyboardRemove())
     await Form.age.set()
 
 
-# Обработка сообщения с возрастом
+# Обработчик возраста пользователя
 @dp.message_handler(state=Form.age)
-async def process_age(message: types.Message, state: FSMContext):
+async def set_user_age(message: types.Message, state: FSMContext):
     x = message.text
     if not x.isdigit():
         await message.answer(f'Введите число')
@@ -74,8 +74,9 @@ async def process_age(message: types.Message, state: FSMContext):
                 f'Указан некорректный возраст. Тут присутствуют возрастные ограничения (от 16 до 75 лет)')
 
 
+# Обработчик пола пользователя
 @dp.message_handler(state=Form.sex)
-async def process_gender(message: types.Message, state: FSMContext):
+async def set_user_sex(message: types.Message, state: FSMContext):
     if message.text not in ['Я девушка', 'Я парень']:
         await message.answer('admin: бро нажми на кнопку...')
     else:
@@ -86,19 +87,17 @@ async def process_gender(message: types.Message, state: FSMContext):
         await Form.personal_data.set()
 
 
-# Обработка сообщения с личными данными
+# Обработчик описания анкеты пользователя
 @dp.message_handler(state=Form.personal_data)
-async def process_personal_data(message: types.Message, state: FSMContext):
+async def set_user_personal_data(message: types.Message, state: FSMContext):
     personal_data = message.text
     user_id = message.from_user.id
     if personal_data == 'Оставить без описания':
         await state.update_data(personal_data="")
         user_data = await state.get_data()
-
         if get_user_by_id(user_id) is None:
             add_data(user_id, user_id, user_data, 0, 0, 1, 0)
         else:
-
             # os.remove(f'images/{user_id}/{user_id}.jpg')
             update_data(user_id, user_data)
 
@@ -108,7 +107,6 @@ async def process_personal_data(message: types.Message, state: FSMContext):
     elif len(personal_data) <= 1000:
         await state.update_data(personal_data=personal_data)
         user_data = await state.get_data()
-
         if get_user_by_id(user_id) is None:
             add_data(user_id, user_id, user_data, 0, 0, 1, 0)
         else:
@@ -122,22 +120,21 @@ async def process_personal_data(message: types.Message, state: FSMContext):
                              , reply_markup=types.ReplyKeyboardRemove())
         await Form.personal_data.set()
 
+    # Обработка некорректной отправки фотографии
     @dp.message_handler(content_types=types.ContentType.TEXT, state=Form.img)
     async def handle_message(message: types.Message):
         await message.answer('Вы отправили текстовое сообщение\nОтправьте фотографию📸')
 
 
-# Обработчик приема изображения
+# Обработчик фотографии пользователя
 @dp.message_handler(content_types=types.ContentType.PHOTO, state=Form.img)
-async def handle_photo(message: types.Message, state: FSMContext):
+async def set_user_photo(message: types.Message, state: FSMContext):
     photo = message.photo[-1]
     file_id = photo.file_id
     user_id = message.from_user.id
     file = await bot.get_file(file_id)
     file_path = file.file_path
-
     save_photo(message.from_user.id, file_id)
-
     # await bot.download_file(file_path, f"images/{user_id}/{user_id}.jpg")
     await state.update_data(img=photo)
     await state.finish()
@@ -153,17 +150,17 @@ async def handle_photo(message: types.Message, state: FSMContext):
     # await bot.send_photo(message.from_user.id, file_test.file_id, reply_markup=keyboard)
 
 
-# Обработчик команды /next для переключения на следующую анкету
+# Обработчик dislike
 @dp.message_handler(Text(equals=['👎']))
 async def cmd_next(message: types.Message):
-    global flag_index, list_likov
-    await proverka_profile(message)
+    global flag_index, list_of_likes
+    await chk_profile(message)
     user_list_id = all_users_id(user_sex(message.from_user.id))
     profile = User(message.from_user.id)
     index = profile.index
     keyboard = types.ReplyKeyboardMarkup(keyboard=kb_next, resize_keyboard=True)
     user_list_with_like = ankets_with_like(profile.user_id)
-    if user_list_with_like == []:  # список людей лайкнувших
+    if not user_list_with_like:  # список людей, которые поставили лайк твоей анкете
         if index < len(user_list_id):
             flag_index = 1
             profile_id = user_list_id[index]
@@ -177,12 +174,12 @@ async def cmd_next(message: types.Message):
             profile = User(message.from_user.id)
             await send_profile(profile.user_id, user_list_with_like[profile.index_like], keyboard)
             change_index_like(1, profile.user_id)
-            list_likov = index_spiska(profile.user_id)
+            list_of_likes = index_spiska(profile.user_id)
         elif profile.index_like == len(user_list_with_like):
             profile = User(message.from_user.id)
             change_index_like(0, profile.user_id)
             delete_all_like(profile.user_id)
-            delete_for_liked(list_likov)
+            delete_for_liked(list_of_likes)
             await cmd_next(message)
         else:
             profile = User(message.from_user.id)
@@ -190,11 +187,12 @@ async def cmd_next(message: types.Message):
             change_index_like(profile.index_like + 1, profile.user_id)
 
 
+# Обработчик команды "Смотреть анкеты"
 @dp.message_handler(Text(equals=['Смотреть анкеты 🚀', '4 🚀', '🚀']))
 async def cmd_next2(message: types.Message):
     global flag, flag_index
     flag_index = 1
-    await proverka_profile(message)
+    await chk_profile(message)
     profile = User(message.from_user.id)
     if profile.index_activity == 0:
         user_activity(1, message.from_user.id)
@@ -221,7 +219,7 @@ async def cmd_next2(message: types.Message):
                 change_index(profile.user_id, 0)
 
 
-# Функция для отображения анкет
+# Функция отправления анкеты пользователя
 async def send_profile(user_id, profile_id, keyboard):
     if type(profile_id) == int:
         profile = User(profile_id)
@@ -233,18 +231,17 @@ async def send_profile(user_id, profile_id, keyboard):
         #    profile_text = f"{profile.name}, {profile.age}\n{profile.personal_data}"
         #    await bot.send_message(user_id, profile_text, reply_markup=keyboard, parse_mode=ParseMode.MARKDOWN)
         # else:
-
         # photo = open(f'images/{profile.user_id}/{profile.user_id}.jpg', 'rb')
         profile_text = f"{profile.name}, {profile.age}\n{profile.personal_data}"
         await bot.send_photo(user_id, profile.photo, profile_text, reply_markup=keyboard)
         # await bot.send_photo(user_id, photo, profile_text, reply_markup=keyboard)
 
 
-# Обработка сообщения с личными данными
+# Обработка лайка
 @dp.message_handler(Text(equals='❤'))
-async def process_personal_data(message: types.Message):
+async def user_like(message: types.Message):
     global flag_index
-    await proverka_profile(message)
+    await chk_profile(message)
     profile = User(message.from_user.id)
     user_list_with_like = ankets_with_like(profile.user_id)
     user_list_id = all_users_id(user_sex(profile.user_id))
@@ -278,10 +275,10 @@ async def process_personal_data(message: types.Message):
     await cmd_next(message)
 
 
-# Просмотр собственного профиля
+# Просмотр профиля пользователя
 @dp.message_handler(Text(equals=['Мой профиль🏚️', '🏚️']))
-async def profile(message: types.Message):
-    await proverka_profile(message)
+async def user_profile(message: types.Message):
+    await chk_profile(message)
     profile = User(message.from_user.id)
     profile_text = f"{profile.name}, {profile.age}\n{profile.personal_data}"
     # photo = open(f'images/{profile.user_id}/{profile.user_id}.jpg', 'rb')
@@ -291,16 +288,17 @@ async def profile(message: types.Message):
     await bot.send_message(profile.user_id, msg)
 
 
+# Обработчик полного изменения анкеты из профиля пользователя
 @dp.message_handler(Text(equals='1✏️'))
 async def change_profile(message: types.Message):
-    user_id = message.from_user.id
     # delete_profile(message.from_user.id)
     await message.answer(f"Как тебя зовут?", reply_markup=types.ReplyKeyboardRemove())
     await Form.name.set()
 
 
+# Обработчик изменения фотографии пользователя из профиля
 @dp.message_handler(Text(equals='2📸'))
-async def handle_photo(message: types.Message):
+async def change_photo(message: types.Message):
     await message.answer("Добавьте фотографию📸", reply_markup=types.ReplyKeyboardRemove())
     await Form1.image.set()
 
@@ -309,8 +307,9 @@ async def handle_photo(message: types.Message):
         await message.answer('Вы отправили текстовое сообщение\nОтправьте фотографию📸')
 
 
+# Обработчик фотографии пользователя из профиля
 @dp.message_handler(content_types=types.ContentType.PHOTO, state=Form1.image)
-async def handle_photo_1(message: types.Message, state: FSMContext):
+async def change_photo_1(message: types.Message, state: FSMContext):
     photo = message.photo[-1]
     profile = User(message.from_user.id)
     file_id, user_id = photo.file_id, message.from_user.id
@@ -326,8 +325,9 @@ async def handle_photo_1(message: types.Message, state: FSMContext):
     msg = "1. Изменить анкету✏️\n2. Изменить фото📸 \n3. Изменить текст анкеты📜\n4. Смотреть анкеты🚀"
 
 
+# Обработчик описания анкеты пользователя из профиля
 @dp.message_handler(Text(equals='3📜'))
-async def handle_photo(message: types.Message):
+async def change_personal_data(message: types.Message):
     keyboard = types.ReplyKeyboardMarkup(keyboard=kb_skip_about, resize_keyboard=True)
     await message.answer("📜 Измените описание вашей анкеты 📜", reply_markup=keyboard)
     await Form2.text.set()
@@ -354,10 +354,11 @@ async def process_personal_data_1(message: types.Message, state: FSMContext):
         await message.answer(msg, reply_markup=keyboard)
 
 
+# Главное меню бота
 @dp.message_handler(Text(equals='💤'))
 async def main_page(message: types.Message):
     global flag
-    await proverka_profile(message)
+    await chk_profile(message)
     flag += 1
     keyboard = types.ReplyKeyboardMarkup(keyboard=kb_main_page, resize_keyboard=True)
     msg = ("Вы перешли в основное меню. \n"
@@ -368,9 +369,10 @@ async def main_page(message: types.Message):
     await message.answer(msg, reply_markup=keyboard)
 
 
+# Обработчик заморозки анкеты
 @dp.message_handler(Text(equals=['Я больше не хочу никого искать', '⛔']))
 async def off_profile(message: types.Message):
-    await proverka_profile(message)
+    await chk_profile(message)
     profile = User(message.from_user.id)
     user_activity(0, profile.user_id)
     keyboard = types.ReplyKeyboardMarkup(keyboard=kb_change_activity, resize_keyboard=True)
@@ -378,9 +380,10 @@ async def off_profile(message: types.Message):
     await message.answer(msg, reply_markup=keyboard)
 
 
+# Обработчик удаления анкеты
 @dp.message_handler(Text(equals=['Удалить анкету', '🗑️']))
-async def delete_porfile(message: types.Message):
-    await proverka_profile(message)
+async def delete_user_profile(message: types.Message):
+    await chk_profile(message)
     user_id = message.from_user.id
     delete_profile(message.from_user.id)
     # os.remove(f'images/{user_id}/{user_id}.jpg')
@@ -389,7 +392,7 @@ async def delete_porfile(message: types.Message):
     await message.answer(msg, reply_markup=keyboard)
 
 
-async def proverka_profile(message: types.Message):
+async def chk_profile(message: types.Message):
     user_id = message.from_user.id
     user_data = get_user_by_id(user_id)
     if user_data is None:
@@ -403,8 +406,8 @@ async def proverka_profile(message: types.Message):
 
 
 @dp.message_handler(content_types=types.ContentTypes.TEXT)
-async def proverka(message: types.message):
-    await proverka_profile(message)
+async def check_prf(message: types.message):
+    await chk_profile(message)
 
 
 if __name__ == '__main__':
